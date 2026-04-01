@@ -1,0 +1,12 @@
+[project]
+name = "vaultcontroller"
+version = "0.1.0"
+description = "Simple VeraCrypt vault launcher GUI."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+build = [
+    "pyinstaller>=6.0",
+]
