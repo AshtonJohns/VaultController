@@ -8,7 +8,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 
-CONFIG_PATH = Path(r"C:\Users\ashto\OneDrive\Personal Vault\veracrypt_vaultcontroller.yaml")
+CONFIG_PATH = Path.home() / "OneDrive/Personal Vault/veracrypt_vaultcontroller.yaml"
+
 VERACRYPT_PATHS = (
     Path(r"C:\Program Files\VeraCrypt\VeraCrypt.exe"),
     Path(r"C:\Program Files (x86)\VeraCrypt\VeraCrypt.exe"),
