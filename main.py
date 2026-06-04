@@ -5,7 +5,7 @@ import string
 import subprocess
 import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import messagebox, scrolledtext, ttk
 
 
 CONFIG_PATH = Path.home() / "OneDrive/Personal Vault/veracrypt_vaultcontroller.yaml"
@@ -14,6 +14,8 @@ VERACRYPT_PATHS = (
     Path(r"C:\Program Files\VeraCrypt\VeraCrypt.exe"),
     Path(r"C:\Program Files (x86)\VeraCrypt\VeraCrypt.exe"),
 )
+
+
 def find_veracrypt() -> Path | None:
     for candidate in VERACRYPT_PATHS:
         if candidate.exists():
@@ -34,6 +36,10 @@ def read_config() -> tuple[list[tuple[str, str]], str | None]:
     except OSError as exc:
         return [], f"Could not read config file:\n{exc}"
 
+    return parse_config_text(raw_text)
+
+
+def parse_config_text(raw_text: str) -> tuple[list[tuple[str, str]], str | None]:
     entries: list[tuple[str, str]] = []
     for line_number, line in enumerate(raw_text.splitlines(), start=1):
         stripped = line.strip()
@@ -116,6 +122,7 @@ class VaultControllerApp:
         self.veracrypt_path = find_veracrypt()
         self.entries: list[tuple[str, str]] = []
         self.mounted_entries: list[tuple[str, str]] = []
+        self.manual_config_text: str | None = None
         self.selected_container = tk.StringVar()
         self.selected_drive = tk.StringVar()
         self.status_text = tk.StringVar(value="Loading configuration...")
@@ -151,8 +158,14 @@ class VaultControllerApp:
         ttk.Button(button_row, text="Refresh", command=self.refresh_entries).grid(
             row=0, column=0, padx=(0, 8)
         )
+        ttk.Button(button_row, text="Paste Config", command=self.open_manual_config).grid(
+            row=0, column=1, padx=(0, 8)
+        )
+        ttk.Button(button_row, text="Use Config File", command=self.use_config_file).grid(
+            row=0, column=2, padx=(0, 8)
+        )
         ttk.Button(button_row, text="Mount", command=self.mount_selected).grid(
-            row=0, column=1
+            row=0, column=3
         )
 
         ttk.Label(frame, text="Mounted this session").grid(row=5, column=0, sticky="w", pady=(16, 4))
@@ -176,7 +189,7 @@ class VaultControllerApp:
         status_label.grid(row=8, column=0, columnspan=2, sticky="w", pady=(12, 0))
 
     def refresh_entries(self) -> None:
-        self.entries, error = read_config()
+        self.entries, error = self.load_entries()
 
         drive_values = available_drive_letters()
         self.drive_combo["values"] = drive_values
@@ -200,12 +213,88 @@ class VaultControllerApp:
 
         veracrypt_message = (
             f"Ready. Loaded {len(self.entries)} vault entr"
-            f"{'y' if len(self.entries) == 1 else 'ies'} from:\n{CONFIG_PATH}"
+            f"{'y' if len(self.entries) == 1 else 'ies'} from:\n{self.config_source_label()}"
         )
         if not self.veracrypt_path:
             veracrypt_message += "\n\nVeraCrypt.exe was not found in the default install location."
         self.status_text.set(veracrypt_message)
         self.refresh_mounted_list()
+
+    def load_entries(self) -> tuple[list[tuple[str, str]], str | None]:
+        if self.manual_config_text is not None:
+            return parse_config_text(self.manual_config_text)
+        return read_config()
+
+    def config_source_label(self) -> str:
+        if self.manual_config_text is not None:
+            return "manual pasted configuration"
+        return str(CONFIG_PATH)
+
+    def open_manual_config(self) -> None:
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Paste Vault Config")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(True, True)
+
+        dialog.columnconfigure(0, weight=1)
+        dialog.rowconfigure(1, weight=1)
+
+        ttk.Label(dialog, text="Paste YAML-style vault entries").grid(
+            row=0, column=0, sticky="w", padx=12, pady=(12, 4)
+        )
+
+        text_box = scrolledtext.ScrolledText(dialog, width=72, height=14, wrap="none")
+        text_box.grid(row=1, column=0, sticky="nsew", padx=12)
+        text_box.insert("1.0", self.get_manual_config_initial_text())
+        text_box.focus_set()
+
+        button_row = ttk.Frame(dialog)
+        button_row.grid(row=2, column=0, sticky="e", padx=12, pady=12)
+
+        ttk.Button(
+            button_row,
+            text="Cancel",
+            command=dialog.destroy,
+        ).grid(row=0, column=0, padx=(0, 8))
+        ttk.Button(
+            button_row,
+            text="Apply",
+            command=lambda: self.apply_manual_config(dialog, text_box),
+        ).grid(row=0, column=1)
+
+    def get_manual_config_initial_text(self) -> str:
+        if self.manual_config_text is not None:
+            return self.manual_config_text
+
+        try:
+            return CONFIG_PATH.read_text(encoding="utf-8")
+        except OSError:
+            return "F:/path/to/container.hc: mypassword"
+
+    def apply_manual_config(
+        self,
+        dialog: tk.Toplevel,
+        text_box: scrolledtext.ScrolledText,
+    ) -> None:
+        raw_text = text_box.get("1.0", "end-1c")
+        entries, error = parse_config_text(raw_text)
+        if error:
+            messagebox.showerror("Invalid Manual Config", error, parent=dialog)
+            return
+
+        self.manual_config_text = raw_text
+        self.entries = entries
+        dialog.destroy()
+        self.refresh_entries()
+
+    def use_config_file(self) -> None:
+        if self.manual_config_text is None:
+            self.refresh_entries()
+            return
+
+        self.manual_config_text = None
+        self.refresh_entries()
 
     def refresh_mounted_list(self) -> None:
         selected_index = self.mounted_list.curselection()

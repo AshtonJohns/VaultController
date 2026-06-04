@@ -23,6 +23,9 @@ G:/another/container.hc: anotherpassword
 
 If OneDrive Personal Vault is locked, the app will show an inaccessible-file message.
 
+You can also click **Paste Config** in the app and paste the same YAML-style text manually.
+That manual config is used for the current app session until you click **Use Config File** or restart the app.
+
 ## Build EXE
 
 From the project folder:
